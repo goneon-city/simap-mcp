@@ -34,8 +34,9 @@ npm run test:watch   # Run tests in watch mode
 
 ```
 src/
-├── index.ts                          # Entry point
+├── index.ts                          # Entry point (picks stdio vs HTTP transport via PORT)
 ├── server.ts                         # MCP server config + stdio transport
+├── http-server.ts                    # Streamable HTTP transport (remote deployment, e.g. Railway)
 ├── api/
 │   ├── index.ts                      # Re-exports
 │   ├── client.ts                     # SimapClient + exported buildUrl()

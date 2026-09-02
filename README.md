@@ -224,6 +224,19 @@ Then configure your client with the absolute path:
 
 </details>
 
+### Remote deployment (Railway, or any host that sets `PORT`)
+
+The server also supports the MCP [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http), so it can run as a standalone remote service instead of being spawned locally over stdio. It switches automatically: if the `PORT` environment variable is set (as Railway and most PaaS hosts do), it listens over HTTP on `/mcp`; otherwise it uses stdio as above.
+
+To deploy on [Railway](https://railway.com/): create a service from this repository (it builds via the included `Dockerfile`) and set the `MCP_HTTP_AUTH_TOKEN` variable to a secret of your choice — **do this before exposing the service**, since without it `/mcp` is open to anyone who has the URL (all it can do is read public simap.ch data, but you should still lock it down). See [SECURITY.md](./SECURITY.md#remote-http-deployment) for details.
+
+Once deployed, add it to Claude as a custom (remote) connector using the generated Railway domain and your token, e.g. with Claude Code:
+
+```bash
+claude mcp add --transport http simap https://<your-app>.up.railway.app/mcp \
+  --header "Authorization: Bearer <your-token>"
+```
+
 ## Usage
 
 Once configured, just ask your AI assistant in natural language. Mention "in simap" to make sure the assistant routes the request through the MCP server:

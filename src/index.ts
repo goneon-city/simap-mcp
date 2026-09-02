@@ -8,8 +8,18 @@
  */
 
 import { startServer } from "./server.js";
+import { startHttpServer } from "./http-server.js";
 
-startServer().catch((error) => {
+/**
+ * Railway (and most PaaS hosts) set PORT to indicate the server must accept
+ * network connections; local MCP clients spawn this process over stdio and
+ * leave PORT unset.
+ */
+const port = process.env.PORT;
+
+const run = port ? startHttpServer(Number(port)) : startServer();
+
+run.catch((error) => {
   console.error("Fatal error:", error);
   process.exit(1);
 });

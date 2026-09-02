@@ -4,7 +4,7 @@
 
 ```
 Claude / AI Assistant (MCP Client)
-        │ stdio (JSON-RPC)
+        │ stdio (local) or Streamable HTTP (remote, when PORT is set)
         ▼
 simap-mcp Server (McpServer)
   ├── tools/               → 14 tools exposed to the client
@@ -16,12 +16,15 @@ simap-mcp Server (McpServer)
 simap.ch API (https://www.simap.ch/api-doc/)
 ```
 
+`src/index.ts` picks the transport at startup: if `PORT` is set (as on Railway and most PaaS hosts) it starts the Streamable HTTP transport (`src/http-server.ts`) on that port; otherwise it starts the stdio transport (`src/server.ts`), which is how local MCP clients (Claude Desktop, Claude Code, …) spawn it.
+
 ## File Structure
 
 ```
 src/
-├── index.ts                      # Entry point (starts server)
+├── index.ts                      # Entry point (picks stdio vs HTTP transport)
 ├── server.ts                     # MCP server creation & tool registration
+├── http-server.ts                # Streamable HTTP transport (used when PORT is set)
 │
 ├── api/
 │   ├── index.ts                  # Re-exports
@@ -129,6 +132,15 @@ If no filter is provided, `publicationFrom` defaults to today's date so the API 
 ### Debug Logging
 
 When `SIMAP_MCP_DEBUG=1` (or `true`), the HTTP client emits verbose stderr logs (full URL, response status, byte size, duration). Default is off — see [SECURITY.md](./SECURITY.md#debug-mode).
+
+### Remote (Streamable HTTP) Deployment
+
+`src/http-server.ts` implements the MCP [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) for hosting the server remotely (e.g. on Railway) instead of spawning it locally over stdio:
+
+- A fresh `McpServer` + `StreamableHTTPServerTransport` (stateless: `sessionIdGenerator: undefined`) is created per request on `POST /mcp`.
+- `GET /healthz` returns `200 ok` for platform health checks.
+- If `MCP_HTTP_AUTH_TOKEN` is set, requests to `/mcp` must carry `Authorization: Bearer <token>`; otherwise the endpoint is open. See [SECURITY.md](./SECURITY.md#remote-http-deployment).
+- `src/index.ts` chooses this transport automatically when `PORT` is set in the environment.
 
 ## Naming Conventions
 
