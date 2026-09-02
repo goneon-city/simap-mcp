@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { AddressInfo } from "node:net";
-import { createHttpServer, isAuthorized } from "../src/http-server.js";
+import { createHttpServer, isAuthorized, startHttpServer } from "../src/http-server.js";
 
 describe("isAuthorized", () => {
   it("allows any request when no token is configured", () => {
@@ -63,5 +63,30 @@ describe("HTTP server routing", () => {
       headers: { Authorization: "Bearer test-token" },
     });
     expect(res.status).toBe(405);
+  });
+});
+
+describe("startHttpServer auth requirement", () => {
+  const originalToken = process.env.MCP_HTTP_AUTH_TOKEN;
+  const originalAllowAnonymous = process.env.MCP_HTTP_ALLOW_ANONYMOUS;
+
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env.MCP_HTTP_AUTH_TOKEN;
+    else process.env.MCP_HTTP_AUTH_TOKEN = originalToken;
+    if (originalAllowAnonymous === undefined) delete process.env.MCP_HTTP_ALLOW_ANONYMOUS;
+    else process.env.MCP_HTTP_ALLOW_ANONYMOUS = originalAllowAnonymous;
+  });
+
+  it("refuses to start without a token or an explicit anonymous opt-in", async () => {
+    delete process.env.MCP_HTTP_AUTH_TOKEN;
+    delete process.env.MCP_HTTP_ALLOW_ANONYMOUS;
+    await expect(startHttpServer(0)).rejects.toThrow(/MCP_HTTP_AUTH_TOKEN/);
+  });
+
+  it("starts without a token when anonymous access is explicitly allowed", async () => {
+    delete process.env.MCP_HTTP_AUTH_TOKEN;
+    process.env.MCP_HTTP_ALLOW_ANONYMOUS = "1";
+    const server = await startHttpServer(0);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 });

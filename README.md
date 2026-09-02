@@ -228,7 +228,7 @@ Then configure your client with the absolute path:
 
 The server also supports the MCP [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http), so it can run as a standalone remote service instead of being spawned locally over stdio. It switches automatically: if the `PORT` environment variable is set (as Railway and most PaaS hosts do), it listens over HTTP on `/mcp`; otherwise it uses stdio as above.
 
-To deploy on [Railway](https://railway.com/): create a service from this repository (it builds via the included `Dockerfile`) and set the `MCP_HTTP_AUTH_TOKEN` variable to a secret of your choice — **do this before exposing the service**, since without it `/mcp` is open to anyone who has the URL (all it can do is read public simap.ch data, but you should still lock it down). See [SECURITY.md](./SECURITY.md#remote-http-deployment) for details.
+To deploy on [Railway](https://railway.com/): create a service from this repository (it builds via the included `Dockerfile`) and set the `MCP_HTTP_AUTH_TOKEN` variable to a secret of your choice (e.g. `openssl rand -hex 24`). This is required — the server refuses to start over HTTP without it, so there's no accidental "forgot to lock it down" moment. See [SECURITY.md](./SECURITY.md#remote-http-deployment) for details.
 
 Once deployed, add it to Claude as a custom (remote) connector using the generated Railway domain and your token, e.g. with Claude Code:
 
@@ -236,6 +236,10 @@ Once deployed, add it to Claude as a custom (remote) connector using the generat
 claude mcp add --transport http simap https://<your-app>.up.railway.app/mcp \
   --header "Authorization: Bearer <your-token>"
 ```
+
+#### Sharing one deployment across a team
+
+The token is a single shared secret, not a per-person login: everyone you give it to has identical access to every tool, there's no per-user audit trail, and revoking one person means rotating the token for everyone. That's an intentional, simple tradeoff for a small trusted team sharing one internal tool — configure the Railway service and generate the token once, then hand every teammate the exact same `claude mcp add` snippet above with your Railway domain and token filled in. It is not meant for scaling past a small group or for cases where you need to revoke or audit individual users — see [SECURITY.md](./SECURITY.md#remote-http-deployment).
 
 ## Usage
 

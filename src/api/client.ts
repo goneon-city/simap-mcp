@@ -45,22 +45,26 @@ export class SimapClient {
    * Performs a GET request to the simap API.
    */
   async get<T>(endpoint: string, options: RequestOptions<T> = {}): Promise<T> {
-    await this.rateLimiter.acquire();
-
-    const url = buildUrl(this.baseUrl, endpoint, options.params);
-    const debug = isDebugEnabled();
-    const startedAt = Date.now();
-
-    if (debug) {
-      console.error(`[${new Date().toISOString()}] GET ${endpoint} → ${url}`);
-    } else {
-      console.error(`[${new Date().toISOString()}] GET ${endpoint}`);
-    }
-
+    // The abort controller is created before acquire() so its timeout bounds
+    // the *total* time a request may take, including time spent queued
+    // behind other callers on the rate limiter — otherwise a queued request
+    // could wait indefinitely with no way to time out.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), options.timeout ?? 30000);
 
     try {
+      await this.rateLimiter.acquire(controller.signal);
+
+      const url = buildUrl(this.baseUrl, endpoint, options.params);
+      const debug = isDebugEnabled();
+      const startedAt = Date.now();
+
+      if (debug) {
+        console.error(`[${new Date().toISOString()}] GET ${endpoint} → ${url}`);
+      } else {
+        console.error(`[${new Date().toISOString()}] GET ${endpoint}`);
+      }
+
       const response = await fetch(url, {
         method: "GET",
         headers: {

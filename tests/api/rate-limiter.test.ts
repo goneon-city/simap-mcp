@@ -87,6 +87,32 @@ describe("SlidingWindowRateLimiter", () => {
     expect(count).toBe(2);
   });
 
+  it("rejects a queued acquire when its signal aborts, without blocking the rest of the queue", async () => {
+    const limiter = new SlidingWindowRateLimiter({ maxRequests: 1, windowMs: 1000 });
+    await limiter.acquire(); // consumes the only slot
+
+    const controller = new AbortController();
+    const aborted = limiter.acquire(controller.signal);
+    const order: number[] = [];
+    const survivor = limiter.acquire().then(() => order.push(2));
+
+    controller.abort();
+    await expect(aborted).rejects.toThrow(/timed out/i);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await survivor;
+    expect(order).toEqual([2]);
+  });
+
+  it("rejects immediately if the signal is already aborted", async () => {
+    const limiter = new SlidingWindowRateLimiter({ maxRequests: 1, windowMs: 1000 });
+    await limiter.acquire();
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(limiter.acquire(controller.signal)).rejects.toThrow(/timed out/i);
+  });
+
   it("uses an injected clock and survives concurrent acquires", async () => {
     let nowValue = 0;
     const limiter = new SlidingWindowRateLimiter({

@@ -88,14 +88,26 @@ export function createHttpServer(): Server {
   return createNodeHttpServer(handleRequest);
 }
 
+function isAnonymousAccessAllowed(): boolean {
+  const v = process.env.MCP_HTTP_ALLOW_ANONYMOUS;
+  return v === "1" || v === "true";
+}
+
 /** Starts the MCP server with the Streamable HTTP transport, listening on `port`. */
 export async function startHttpServer(port: number): Promise<Server> {
-  const httpServer = createHttpServer();
   if (!process.env.MCP_HTTP_AUTH_TOKEN) {
+    if (!isAnonymousAccessAllowed()) {
+      throw new Error(
+        "MCP_HTTP_AUTH_TOKEN is not set. Set it to a secret bearer token before deploying over " +
+          "HTTP, or set MCP_HTTP_ALLOW_ANONYMOUS=1 to explicitly opt into an open (unauthenticated) endpoint."
+      );
+    }
     console.error(
-      "Warning: MCP_HTTP_AUTH_TOKEN is not set; the /mcp endpoint is open to anyone who can reach it."
+      "Warning: MCP_HTTP_ALLOW_ANONYMOUS is set; the /mcp endpoint is open to anyone who can reach it."
     );
   }
+
+  const httpServer = createHttpServer();
   return new Promise((resolve) => {
     httpServer.listen(port, () => {
       console.error(

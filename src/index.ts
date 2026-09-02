@@ -15,11 +15,19 @@ import { startHttpServer } from "./http-server.js";
  * network connections; local MCP clients spawn this process over stdio and
  * leave PORT unset.
  */
-const port = process.env.PORT;
+const portEnv = process.env.PORT;
 
-const run = port ? startHttpServer(Number(port)) : startServer();
+async function run(): Promise<void> {
+  if (portEnv === undefined) return startServer();
 
-run.catch((error) => {
+  const port = Number(portEnv);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`Invalid PORT value: "${portEnv}"`);
+  }
+  return startHttpServer(port).then(() => undefined);
+}
+
+run().catch((error) => {
   console.error("Fatal error:", error);
   process.exit(1);
 });

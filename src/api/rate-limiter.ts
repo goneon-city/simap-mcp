@@ -29,12 +29,29 @@ const DEFAULT_OPTIONS: Required<Pick<RateLimiterOptions, "maxRequests" | "window
   windowMs: 60_000,
 };
 
+interface QueueEntry {
+  resolve: () => void;
+  reject: (error: Error) => void;
+  cleanup?: () => void;
+}
+
+/**
+ * Named "TimeoutError" (matching the DOM/fetch convention) so callers'
+ * generic network/timeout error handling picks it up without special-casing
+ * the rate limiter.
+ */
+function rateLimiterTimeoutError(): Error {
+  const error = new Error("Timed out waiting for a rate limiter slot");
+  error.name = "TimeoutError";
+  return error;
+}
+
 export class SlidingWindowRateLimiter {
   private readonly maxRequests: number;
   private readonly windowMs: number;
   private readonly now: () => number;
   private timestamps: number[] = [];
-  private queue: Array<() => void> = [];
+  private queue: QueueEntry[] = [];
   private scheduled = false;
 
   constructor(opts: Partial<RateLimiterOptions> = {}) {
@@ -57,16 +74,37 @@ export class SlidingWindowRateLimiter {
   /**
    * Waits until a slot is available, then records it and resolves.
    * Concurrent callers are served FIFO.
+   *
+   * If `signal` is provided and fires while the caller is still queued, the
+   * caller is dequeued and the promise rejects — this bounds how long a
+   * request can wait behind others (e.g. by tying it to the caller's own
+   * request timeout) instead of queuing indefinitely.
    */
-  acquire(): Promise<void> {
+  acquire(signal?: AbortSignal): Promise<void> {
     this.prune();
     if (this.queue.length === 0 && this.timestamps.length < this.maxRequests) {
       this.timestamps.push(this.now());
       return Promise.resolve();
     }
 
-    return new Promise<void>((resolve) => {
-      this.queue.push(resolve);
+    if (signal?.aborted) {
+      return Promise.reject(rateLimiterTimeoutError());
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const entry: QueueEntry = { resolve, reject };
+      if (signal) {
+        const onAbort = (): void => {
+          const index = this.queue.indexOf(entry);
+          if (index !== -1) {
+            this.queue.splice(index, 1);
+            reject(rateLimiterTimeoutError());
+          }
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        entry.cleanup = () => signal.removeEventListener("abort", onAbort);
+      }
+      this.queue.push(entry);
       this.scheduleDrain();
     });
   }
@@ -105,9 +143,10 @@ export class SlidingWindowRateLimiter {
   private drain(): void {
     this.prune();
     while (this.timestamps.length < this.maxRequests && this.queue.length > 0) {
-      const resolve = this.queue.shift()!;
+      const entry = this.queue.shift()!;
+      entry.cleanup?.();
       this.timestamps.push(this.now());
-      resolve();
+      entry.resolve();
     }
     if (this.queue.length > 0) {
       this.scheduleDrain();

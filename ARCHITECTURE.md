@@ -139,8 +139,9 @@ When `SIMAP_MCP_DEBUG=1` (or `true`), the HTTP client emits verbose stderr logs 
 
 - A fresh `McpServer` + `StreamableHTTPServerTransport` (stateless: `sessionIdGenerator: undefined`) is created per request on `POST /mcp`.
 - `GET /healthz` returns `200 ok` for platform health checks.
-- If `MCP_HTTP_AUTH_TOKEN` is set, requests to `/mcp` must carry `Authorization: Bearer <token>`; otherwise the endpoint is open. See [SECURITY.md](./SECURITY.md#remote-http-deployment).
-- `src/index.ts` chooses this transport automatically when `PORT` is set in the environment.
+- `startHttpServer()` requires `MCP_HTTP_AUTH_TOKEN` to be set and refuses to start without it (unless `MCP_HTTP_ALLOW_ANONYMOUS=1` is explicitly set); when set, requests to `/mcp` must carry a matching `Authorization: Bearer <token>`. This is a single shared secret, not a per-user credential. See [SECURITY.md](./SECURITY.md#remote-http-deployment).
+- `src/index.ts` chooses this transport automatically when `PORT` is set in the environment, and validates it's a usable port number.
+- `SimapClient.get()` (`src/api/client.ts`) creates its `AbortController` timeout before calling `rateLimiter.acquire(signal)`, so a request queued behind others on the shared rate limiter still times out instead of waiting indefinitely.
 
 ## Naming Conventions
 
